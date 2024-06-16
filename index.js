@@ -39,7 +39,7 @@ router.get('/v1/contacts/:id', async (req, res) => {
     const contact = await ContactModel.findById(id);
 
     if (!contact) {
-      return res.status(404).json({ message: 'Contact not found' });
+      return res.status().json({ message: 'Contact not found' });
     }
 
     res.status(200).json(contact);
@@ -70,7 +70,7 @@ router.put('/v1/contacts/:id', async (req, res) => {
     const updatedContact = await ContactModel.update(id, { fname, lname, email, phone, birthday });
 
     if (!updatedContact) {
-      return res.status(404).json({ message: 'Contact not found' });
+      return res.status(303).json({ message: 'Contact not found' });
     }
 
     res.status(200).json(updatedContact);
@@ -87,7 +87,7 @@ router.delete('/v1/contacts/:id', async (req, res) => {
     const deletedContact = await ContactModel.delete(id);
 
     if (!deletedContact) {
-      return res.status(404).json({ message: 'Contact not found' });
+      return res.status(303).json({ message: 'Contact not found' });
     }
 
     res.status(204).end();
