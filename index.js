@@ -1,110 +1,100 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const { 
-    ContactModel,
-    Pager,
-    sortContacts,
-    filterContacts
-  } = require("@jworkman-fs/asl")
+const router = express.Router();
+const { ContactModel, Pager, sortContacts, filterContacts } = require('@jworkman-fs/asl');
 
-  const app = express();
-  app.use(bodyParser.json());
-  
-  // Example contacts data
-  let contacts = [
-      ContactModel
-  ];
-  
-  app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ message: 'Internal Server Error' });
-});
+router.use(express.json());
 
-// Get all contacts
-app.get('/contacts', (req, res) => {
-    try {
-        // Apply sorting
-        const sorted = sortContacts(contacts, req.query.sort, req.query.direction);
+router.get('/v1/contacts', async (req, res) => {
+  try {
+    let contacts = await ContactModel.findAll();
 
-        // Apply filtering
-        const filtered = filterContacts(sorted, req.get('X-Filter-By'), req.get('X-Filter-Value'));
-
-        // Create pager instance
-        const pager = new Pager(filtered, req.query.page, req.query.size);
-
-        // Set pagination headers
-        res.set("X-Page-Total", pager.total());
-        res.set("X-Page-Next", pager.next());
-        res.set("X-Page-Prev", pager.prev());
-
-        // Send paginated results
-        res.json(pager.results());
-    } catch (error) {
-        next(error); // Pass error to the error handling middleware
+    const filterBy = req.get('X-Filter-By');
+    const filterValue = req.get('X-Filter-Value');
+    if (filterBy && filterValue) {
+      contacts = filterContacts(contacts, filterBy, filterValue);
     }
-});
 
-// Get a single contact
-app.get('/contacts/:id', (req, res) => {
-    try {
-        const id = parseInt(req.params.id);
-        const contact = contacts.find(contact => contact.id === id);
-        if (!contact) {
-            return res.status(404).json({ message: 'Contact not found' });
-        }
-        res.json(contact);
-    } catch (error) {
-        next(error); // Pass error to the error handling middleware
+    const { sort, direction } = req.query;
+    if (sort) {
+      contacts = sortContacts(contacts, sort, direction);
     }
+
+    const pager = new Pager(contacts, req.query.page, req.query.size);
+
+    res.set('X-Page-Total', pager.total());
+    res.set('X-Page-Next', pager.next());
+    res.set('X-Page-Prev', pager.prev());
+
+    res.status(200).json(pager.results());
+  } catch (err) {
+    console.error('Error fetching contacts:', err);
+    res.status(500).json({ error: 'Failed to fetch contacts' });
+  }
 });
 
-// Create a new contact
-app.post('/contacts', (req, res) => {
-    try {
-        const { firstName, lastName, email, phone, birthday } = req.body;
-        const id = contacts.length + 1;
-        const newContact = new ContactModel(id, firstName, lastName, email, phone, birthday);
-        contacts.push(newContact);
-        res.status(201).json(newContact);
-    } catch (error) {
-        next(error); // Pass error to the error handling middleware
+router.get('/v1/contacts/:id', async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const contact = await ContactModel.findById(id);
+
+    if (!contact) {
+      return res.status(404).json({ message: 'Contact not found' });
     }
+
+    res.status(200).json(contact);
+  } catch (err) {
+    console.error(`Error fetching contact with ID ${id}:`, err);
+    res.status(500).json({ error: `Failed to fetch contact with ID ${id}` });
+  }
 });
 
-// Update a contact
-app.put('/contacts/:id', (req, res) => {
-    try {
-        const id = parseInt(req.params.id);
-        const { firstName, lastName, email, phone, birthday } = req.body;
-        const index = contacts.findIndex(contact => contact.id === id);
-        if (index === -1) {
-            return res.status(404).json({ message: 'Contact not found' });
-        }
-        const updatedContact = new ContactModel(id, firstName, lastName, email, phone, birthday);
-        contacts[index] = updatedContact;
-        res.json(updatedContact);
-    } catch (error) {
-        next(error); // Pass error to the error handling middleware
+router.post('/v1/contacts', async (req, res) => {
+  const { fname, lname, email, phone, birthday } = req.body;
+
+  try {
+    const newContact = await ContactModel.create({ fname, lname, email, phone, birthday });
+
+    res.status(201).json(newContact);
+  } catch (err) {
+    console.error('Error creating contact:', err);
+    res.status(500).json({ error: 'Failed to create contact' });
+  }
+});
+
+router.put('/v1/contacts/:id', async (req, res) => {
+  const id = req.params.id;
+  const { fname, lname, email, phone, birthday } = req.body;
+
+  try {
+    const updatedContact = await ContactModel.update(id, { fname, lname, email, phone, birthday });
+
+    if (!updatedContact) {
+      return res.status(404).json({ message: 'Contact not found' });
     }
+
+    res.status(200).json(updatedContact);
+  } catch (err) {
+    console.error(`Error updating contact with ID ${id}:`, err);
+    res.status(500).json({ error: `Failed to update contact with ID ${id}` });
+  }
 });
 
-// Delete a contact
-app.delete('/contacts/:id', (req, res) => {
-    try {
-        const id = parseInt(req.params.id);
-        const index = contacts.findIndex(contact => contact.id === id);
-        if (index === -1) {
-            return res.status(404).json({ message: 'Contact not found' });
-        }
-        contacts.splice(index, 1);
-        res.sendStatus(204);
-    } catch (error) {
-        next(error); // Pass error to the error handling middleware
+router.delete('/v1/contacts/:id', async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const deletedContact = await ContactModel.delete(id);
+
+    if (!deletedContact) {
+      return res.status(404).json({ message: 'Contact not found' });
     }
+
+    res.status(204).end();
+  } catch (err) {
+    console.error(`Error deleting contact with ID ${id}:`, err);
+    res.status(500).json({ error: `Failed to delete contact with ID ${id}` });
+  }
 });
 
-// Run the server on port 8080
-const port = 8080;
-app.listen(port, () => {
-    console.log(`Server is listening on port ${port}`);
-});
+module.exports = router;
